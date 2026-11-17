@@ -16,10 +16,10 @@
 </div>
 <div id="overlay" role="dialog" aria-modal="true" aria-label="Lecture accessible">
 <div class="modalbar"><strong id="modalTitle">Lecture</strong><select id="pageChoice" aria-label="Choisir une page"></select><button id="close" type="button">✕ Fermer</button></div>
-<div id="readerControls"><button id="fontMinus" type="button">A−</button><button id="fontPlus" type="button">A+</button><select id="voiceChoice" aria-label="Voix française disponible"><option value="auto">Voix française par défaut</option></select><button id="speak" type="button">▶ Écouter</button><button id="pause" type="button">⏸ Pause / Reprendre</button><button id="stop" type="button">■ Arrêter</button><span id="voiceInfo"></span></div>
+<div id="readerControls"><button id="fontMinus" type="button">A−</button><button id="fontPlus" type="button">A+</button><span id="audioMode">🎙️ Voix de Paul</span><button id="speak" type="button">▶ Écouter</button><button id="pause" type="button">⏸ Pause / Reprendre</button><button id="stop" type="button">■ Arrêter</button><span id="voiceInfo"></span></div>
 <div id="zoomControls"><button id="zoomMinus" type="button">−</button><span id="zoomLabel">100 %</span><button id="zoomPlus" type="button">+</button><button id="zoomReset" type="button">Réinitialiser</button></div>
 <div id="reading"></div><div id="zooming"><canvas id="zoomcanvas"></canvas></div>
-<div id="note">Lecture assistée : ordre de lecture défini pour les articles sélectionnés. Certains passages extraits du PDF peuvent nécessiter une relecture éditoriale. Les voix dépendent de votre appareil.</div>
+<div id="note">Lecture assistée : ordre de lecture défini pour les articles sélectionnés. Certains passages extraits du PDF peuvent nécessiter une relecture éditoriale. Les enregistrements de Paul sont prioritaires ; pour les pages sans MP3, une voix de synthèse est utilisée si disponible.</div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
@@ -69,24 +69,54 @@ $('pageChoice').onchange=e=>{modalPage=Number(e.target.value);stopSpeech();showM
 function showModalPage(){if(modalMode==='read')showArticle();else showZoom();}
 function showArticle(){const item=articleData[String(modalPage)];const div=$('reading');div.replaceChildren();const h=document.createElement('h2');h.textContent=item?.title||'Page '+modalPage;div.append(h);if(!item){div.append('Texte indisponible.');return;}for(const paragraph of item.paragraphs){const p=document.createElement('p');p.textContent=paragraph;div.append(p);}div.style.fontSize=fontSize+'px';div.scrollTop=0;}
 $('fontMinus').onclick=()=>{$('reading').style.fontSize=(fontSize=Math.max(15,fontSize-2))+'px'};$('fontPlus').onclick=()=>{$('reading').style.fontSize=(fontSize=Math.min(34,fontSize+2))+'px'};
-// Les voix réellement disponibles sur Android varient selon l'appareil.
-const desiredVoices=['Julie','Paul'];
+// Uniquement Paul pour la synthèse vocale de secours.
+const desiredVoices=['Paul'];
 function refreshVoices(){
  if(!('speechSynthesis' in window))return;
- const previous=$('voiceChoice').value;
- voices=speechSynthesis.getVoices().filter(v=>/^fr([_-]|$)/i.test(v.lang)&&desiredVoices.some(name=>new RegExp('\\b'+name+'\\b','i').test(v.name)));
- const select=$('voiceChoice');select.replaceChildren();
- for(let i=0;i<voices.length;i++){const opt=document.createElement('option');opt.value=String(i);opt.textContent=voices[i].name;select.append(opt);}
- if(!voices.length){const opt=document.createElement('option');opt.value='auto';opt.textContent='Voix française du téléphone';select.append(opt);}
- if([...select.options].some(o=>o.value===previous))select.value=previous;
- else {const paul=voices.findIndex(v=>/\bPaul\b/i.test(v.name));select.value=String(paul>=0?paul:0);}
- $('voiceInfo').textContent='';
+ voices=speechSynthesis.getVoices().filter(v=>/^fr([_-]|$)/i.test(v.lang)&&/\bPaul\b/i.test(v.name));
 }
 if('speechSynthesis' in window){refreshVoices();speechSynthesis.addEventListener('voiceschanged',refreshVoices);}
-$('voiceChoice').addEventListener('focus',refreshVoices);
-$('readBtn').addEventListener('click',()=>setTimeout(refreshVoices,150));
+const recordedAudio=new Audio();recordedAudio.preload='none';
+let recordedMode=false,recordedRequest=0;
+function stopRecordedAudio(){
+ recordedRequest++;recordedMode=false;
+ recordedAudio.pause();recordedAudio.removeAttribute('src');recordedAudio.load();
+}
+function startSyntheticFallback(){
+ recordedMode=false;
+ if(!('speechSynthesis' in window)){
+  $('voiceInfo').textContent='Enregistrement indisponible et synthèse vocale non prise en charge.';
+  return;
+ }
+ const data=articleData[String(modalPage)];if(!data)return;
+ refreshVoices();speechParts=makeParts(data);speechActive=true;speechRun++;
+ $('voiceInfo').textContent=voices.length?'Voix de synthèse Paul (MP3 absent)':'Voix française de secours (Paul indisponible sur cet appareil)';
+ speakNext();
+}
+function playRecordedPage(){
+ const request=++recordedRequest;
+ recordedMode=true;speechActive=false;speechPaused=false;
+ const filename=`audio/P${modalPage}-Mag10-Voix-Paul.mp3`;
+ recordedAudio.src=filename;
+ $('voiceInfo').textContent='Chargement de l’enregistrement de Paul…';
+ $('pause').textContent='⏸ Pause';
+ const fallback=()=>{
+  if(request!==recordedRequest||!recordedMode)return;
+  recordedAudio.pause();recordedAudio.removeAttribute('src');recordedAudio.load();
+  startSyntheticFallback();
+ };
+ recordedAudio.onerror=fallback;
+ recordedAudio.onplaying=()=>{if(request===recordedRequest&&recordedMode)$('voiceInfo').textContent='🎙️ Enregistrement de Paul — page '+modalPage;};
+ recordedAudio.onended=()=>{if(request===recordedRequest){recordedMode=false;$('pause').textContent='⏸ Pause';$('voiceInfo').textContent='Enregistrement terminé.';}};
+ const promise=recordedAudio.play();
+ if(promise&&typeof promise.catch==='function')promise.catch(err=>{
+  if(request!==recordedRequest||!recordedMode)return;
+  if(err.name==='NotAllowedError'){$('voiceInfo').textContent='Lecture bloquée par le navigateur : cliquez de nouveau sur Écouter.';return;}
+  fallback();
+ });
+}
 let speechParts=[],speechIndex=0,speechOffset=0,speechPaused=false,speechActive=false,speechDelay=null,speechRun=0;
-function stopSpeech(){speechRun++;speechActive=false;speechPaused=false;speechParts=[];speechIndex=0;speechOffset=0;if(speechDelay!==null){clearTimeout(speechDelay);speechDelay=null;}if('speechSynthesis' in window)speechSynthesis.cancel();$('pause').textContent='⏸ Pause';}
+function stopSpeech(){stopRecordedAudio();speechRun++;speechActive=false;speechPaused=false;speechParts=[];speechIndex=0;speechOffset=0;if(speechDelay!==null){clearTimeout(speechDelay);speechDelay=null;}if('speechSynthesis' in window)speechSynthesis.cancel();$('pause').textContent='⏸ Pause';}
 function makeParts(data){
  // Les paragraphes et titres sont prononcés sans pause au milieu d'une phrase.
  const chunks=[];
@@ -111,7 +141,7 @@ function speakNext(){
  // Pronunciation-only normalization: the displayed editorial text stays unchanged.
  let spoken=text;
  spoken=spoken.replace(/\bDussarps\b/gi,'Dussarpse'); // Prononciation du nom : P et S audibles
- spoken=spoken.replace(/CESTA\s+DE\s+NADAÜ/gi,'sèsta de nada-u'); // Lecture phonétique, sans expansion du nom de l’événement
+ spoken=spoken.replace(/CESTA[\s\u00a0]+DE[\s\u00a0]+NADA(?:Ü|U\u0308|U)/gi,'sèsta de nada-u'); // Lecture phonétique, sans expansion du nom de l’événement
  spoken=spoken.replace(/\bLagor\b/gi,'La-gor');
  spoken=spoken.replace(/\bswimrunner(s)?\b/gi,(_,plural)=>'souim reuneur'+(plural?'s':''));
  spoken=spoken.replace(/\bswimrun\b/gi,'souim reune');
@@ -155,7 +185,7 @@ function speakNext(){
 
 
  const u=new SpeechSynthesisUtterance(spoken);u.lang='fr-FR';u.rate=(modalPage>=5&&modalPage<=23&&speechIndex===0)?.84:.95;u.pitch=1.1;
- const choice=Number($('voiceChoice').value);if(voices[choice])u.voice=voices[choice];
+ if(voices[0])u.voice=voices[0];
  // La devise de la page 32 est prononcée en anglais, sans changer les voix françaises des autres pages.
  if(modalPage===32 && /Together,\s*stronger with every game/i.test(text)){
   u.lang='en-GB';
@@ -173,14 +203,16 @@ function speakNext(){
  speechSynthesis.speak(u);
 }
 $('speak').onclick=()=>{
- if(!('speechSynthesis' in window)){alert('La lecture vocale n’est pas disponible sur ce navigateur.');return;}
  const data=articleData[String(modalPage)];if(!data)return;
- stopSpeech();speechParts=makeParts(data);speechActive=true;speechRun++;
- const selected=voices[Number($('voiceChoice').value)];
- $('voiceInfo').textContent='';
- speakNext();
+ stopSpeech();
+ playRecordedPage();
 };
 $('pause').onclick=()=>{
+ if(recordedMode){
+  if(recordedAudio.paused){recordedAudio.play().catch(()=>{$('voiceInfo').textContent='Impossible de reprendre cet enregistrement.';});$('pause').textContent='⏸ Pause';}
+  else{recordedAudio.pause();$('pause').textContent='▶ Reprendre';}
+  return;
+ }
  if(!speechActive)return;
  if(!speechPaused){
   speechPaused=true;
