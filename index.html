@@ -110,6 +110,7 @@ function speakNext(){
  
  // Pronunciation-only normalization: the displayed editorial text stays unchanged.
  let spoken=text;
+ spoken=spoken.replace(/\bDussarps\b/gi,'Dussarpse'); // Prononciation du nom : P et S audibles
  spoken=spoken.replace(/CESTA\s+DE\s+NADAÜ/gi,'sèsta de nada-u'); // Lecture phonétique, sans expansion du nom de l’événement
  spoken=spoken.replace(/\bLagor\b/gi,'La-gor');
  spoken=spoken.replace(/\bswimrunner(s)?\b/gi,(_,plural)=>'souim reuneur'+(plural?'s':''));
