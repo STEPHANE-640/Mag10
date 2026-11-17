@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Section Paloise Omnisports — Le Mag n°10</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial,Helvetica,sans-serif}body{background:#11251c;color:white}button,select{font:inherit}button{cursor:pointer;border:1px solid #91b09b;background:#345e43;color:white;border-radius:8px;padding:10px 13px}button:hover{background:#477d58}button:disabled{opacity:.4;cursor:default}button:focus-visible,select:focus-visible{outline:3px solid #f2c66d}#app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}header,footer{background:#254230;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 12px;flex-shrink:0;flex-wrap:wrap}header{justify-content:space-between;min-height:56px}header strong{font-size:15px}.brand{display:flex;flex-direction:column;gap:3px}.brand span{font-size:12px;color:#e4f1e8}footer{min-height:55px}#viewer{flex:1;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:12px;background:#182920}#book{flex-shrink:0;margin:auto}.page{background:white;overflow:hidden}.page canvas{display:block;width:100%;height:100%}#status{min-width:92px;text-align:center;font-size:13px}#app:fullscreen{height:100vh;height:100dvh;background:#10251b}#app:fullscreen #viewer{padding:5px}#app:fullscreen header{min-height:44px}#app:fullscreen footer{min-height:48px}#app:fullscreen #viewer{padding:2px}#app:fullscreen header,#app:fullscreen footer{display:none}#app:fullscreen #book{transform-origin:center center}#overlay{position:fixed;inset:0;background:rgba(4,17,11,.93);z-index:2000;display:none;flex-direction:column;color:white}#overlay.open{display:flex}.modalbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;padding:9px;background:#203e2c}.modalbar select{max-width:185px;padding:9px;border-radius:6px;background:white;color:#13261a}#reading,#zooming{flex:1;min-height:0;overflow:auto;display:none}#reading.active,#zooming.active{display:block}#reading{background:#fff;color:#17271e;padding:20px max(20px,calc((100vw - 760px)/2));font-size:20px;line-height:1.65}#reading h2{font-size:1.35em;line-height:1.25}#reading p{margin:0 0 1.1em}#zooming{text-align:center;background:#303030;touch-action:pan-x pan-y}#zoomcanvas{display:block;margin:15px auto;max-width:none;background:white;box-shadow:0 4px 20px #111}#note{font-size:12px;text-align:center;padding:5px;background:#203e2c}#readerControls{display:none}#readerControls.visible{display:flex}#zoomControls{display:none}#zoomControls.visible{display:flex}#readerControls,#zoomControls{align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:8px;background:#203e2c}#voiceInfo{font-size:12px;max-width:360px}#readerControls label{font-size:12px;display:inline-flex;gap:5px;align-items:center}#readerControls select{max-width:240px}#err{color:#ffe2a1;font-size:13px}#close{background:#6a3838}@media(max-width:650px){header strong{font-size:12px}.brand span{font-size:11px}header{gap:5px;padding:6px}header button,footer button{padding:8px;font-size:12px}footer{gap:6px}#viewer{padding:5px}#status{min-width:65px;font-size:11px}#reading{padding:18px;font-size:19px}.modalbar button,.modalbar select{padding:8px;font-size:13px}}
+@media (min-width:651px){#zoomBtn{display:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+<header><div class="brand"><strong>SECTION PALOISE OMNISPORTS · LE MAG10</strong><span>Le magazine de toutes les Sections !</span></div><div><button id="readBtn" type="button">📖 Lire / Écouter</button> <button id="zoomBtn" type="button">🔎 Zoom</button> <button id="fullBtn" type="button">⛶ Plein écran</button></div></header>
+<main id="viewer"><div id="book"></div></main>
+<footer><button id="prev" type="button">❮ Précédent</button><span id="status">Chargement…</span><button id="next" type="button">Suivant ❯</button></footer>
+</div>
+<div id="overlay" role="dialog" aria-modal="true" aria-label="Lecture accessible">
+<div class="modalbar"><strong id="modalTitle">Lecture</strong><select id="pageChoice" aria-label="Choisir une page"></select><button id="close" type="button">✕ Fermer</button></div>
+<div id="readerControls"><button id="fontMinus" type="button">A−</button><button id="fontPlus" type="button">A+</button><select id="voiceChoice" aria-label="Voix française disponible"><option value="auto">Voix française par défaut</option></select><button id="speak" type="button">▶ Écouter</button><button id="pause" type="button">⏸ Pause / Reprendre</button><button id="stop" type="button">■ Arrêter</button><span id="voiceInfo"></span></div>
+<div id="zoomControls"><button id="zoomMinus" type="button">−</button><span id="zoomLabel">100 %</span><button id="zoomPlus" type="button">+</button><button id="zoomReset" type="button">Réinitialiser</button></div>
+<div id="reading"></div><div id="zooming"><canvas id="zoomcanvas"></canvas></div>
+<div id="note">Lecture assistée : ordre de lecture défini pour les articles sélectionnés. Certains passages extraits du PDF peuvent nécessiter une relecture éditoriale. Les voix dépendent de votre appareil.</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const eligible=[3,4,5,7,8,9,11,12,13,15,17,18,19,20,21,23,25,26,27,29,31,32,33,35,36,37,39,40,41,42];
+const ratio=480/679;
+let pdf=null,flip=null,articleData={},pageIndex=0,modalPage=3,modalMode='read',fontSize=20,zoom=1,voices=[],resizeHandle=null,renderTask=null,speechToken=0;
+const app=$('app'),viewer=$('viewer'),book=$('book');
+// Le panneau reste visible même lorsque l’application est en plein écran.
+app.appendChild($('overlay'));
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+function sizeForViewer(){
+ const cs=getComputedStyle(viewer),aw=Math.max(1,viewer.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-20),ah=Math.max(1,viewer.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-20);
+ const desktop=aw>=700;const w=Math.max(1,Math.floor(Math.min(aw/(desktop?2:1),ah*ratio,650)));return {width:w,height:Math.max(1,Math.floor(w/ratio)),desktop};
+}
+function initFlip(){const s=sizeForViewer();flip=new St.PageFlip(book,{width:s.width,height:s.height,size:'fixed',showCover:true,usePortrait:!s.desktop,autoSize:false,drawShadow:true,maxShadowOpacity:.5,flippingTime:850,mobileScrollSupport:false,useMouseEvents:true,swipeDistance:30});flip.loadFromHTML(document.querySelectorAll('.page'));flip.on('flip',e=>{pageIndex=e.data;updateStatus()});updateStatus();}
+function updateStatus(){if(!pdf)return;$('status').textContent='Page '+(pageIndex+1)+' / '+pdf.numPages;}
+/* Agrandir le livre entier en plein écran sans toucher aux pages ni à PageFlip. */
+function adaptFullscreen(){
+ if(!flip)return;
+ book.style.zoom='1';
+ book.style.transform='none';
+ if(!document.fullscreenElement)return;
+ const cs=getComputedStyle(viewer);
+ const aw=viewer.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-8;
+ const ah=viewer.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-8;
+ const r=book.getBoundingClientRect();
+ if(r.width>0&&r.height>0){
+  const factor=Math.max(1,Math.min(aw/r.width,ah/r.height,3));
+  // CSS zoom agrandit le contenu ET sa surface interactive dans Chrome/Edge.
+  book.style.zoom=String(factor);
+ }
+}
+async function init(){try{const response=await fetch('articles.json');if(!response.ok)throw Error('articles.json introuvable');articleData=await response.json();pdf=await pdfjsLib.getDocument('magazine.pdf').promise;for(let i=1;i<=pdf.numPages;i++){$('status').textContent='Chargement '+i+'/'+pdf.numPages;const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.4}),canvas=document.createElement('canvas'),page=document.createElement('div');canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);await pg.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;page.className='page';page.dataset.density=(i===1||i===pdf.numPages)?'hard':'soft';page.append(canvas);book.append(page);}initFlip();}catch(e){console.error(e);$('status').textContent='Erreur : '+e.message;}}
+$('next').onclick=()=>flip?.flipNext();$('prev').onclick=()=>flip?.flipPrev();
+$('fullBtn').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await app.requestFullscreen();}catch(e){alert('Plein écran indisponible : '+e.message)}};
+document.addEventListener('fullscreenchange',()=>{$('fullBtn').textContent=document.fullscreenElement?'✕ Quitter':'⛶ Plein écran';requestAnimationFrame(()=>setTimeout(adaptFullscreen,150));});
+window.addEventListener('resize',()=>{clearTimeout(resizeHandle);resizeHandle=setTimeout(adaptFullscreen,180)});
+document.addEventListener('keydown',e=>{if($('overlay').classList.contains('open')){if(e.key==='Escape')closeModal();return;}if(e.key==='ArrowRight')flip?.flipNext();if(e.key==='ArrowLeft')flip?.flipPrev();});
+function selectedPage(){const current=pageIndex+1;return eligible.includes(current)?current:eligible.find(n=>n>=current)||eligible[0];}
+function openModal(mode){if(!pdf)return;modalMode=mode;modalPage=selectedPage();$('overlay').classList.add('open');$('reading').classList.toggle('active',mode==='read');$('zooming').classList.toggle('active',mode==='zoom');$('readerControls').classList.toggle('visible',mode==='read');$('zoomControls').classList.toggle('visible',mode==='zoom');$('modalTitle').textContent=mode==='read'?'Lire / Écouter':'Zoom de la page';const options=mode==='read'?eligible:Array.from({length:pdf.numPages},(_,i)=>i+1);$('pageChoice').replaceChildren(...options.map(n=>{const o=document.createElement('option');o.value=n;o.textContent='Page '+n;return o}));if(mode==='zoom'){modalPage=pageIndex+1;} $('pageChoice').value=modalPage;showModalPage();}
+function closeModal(){stopSpeech();$('overlay').classList.remove('open');}
+$('readBtn').onclick=()=>openModal('read');$('zoomBtn').onclick=()=>openModal('zoom');$('close').onclick=closeModal;
+$('pageChoice').onchange=e=>{modalPage=Number(e.target.value);stopSpeech();showModalPage()};
+function showModalPage(){if(modalMode==='read')showArticle();else showZoom();}
+function showArticle(){const item=articleData[String(modalPage)];const div=$('reading');div.replaceChildren();const h=document.createElement('h2');h.textContent=item?.title||'Page '+modalPage;div.append(h);if(!item){div.append('Texte indisponible.');return;}for(const paragraph of item.paragraphs){const p=document.createElement('p');p.textContent=paragraph;div.append(p);}div.style.fontSize=fontSize+'px';div.scrollTop=0;}
+$('fontMinus').onclick=()=>{$('reading').style.fontSize=(fontSize=Math.max(15,fontSize-2))+'px'};$('fontPlus').onclick=()=>{$('reading').style.fontSize=(fontSize=Math.min(34,fontSize+2))+'px'};
+// Les voix réellement disponibles sur Android varient selon l'appareil.
+const desiredVoices=['Julie','Paul'];
+function refreshVoices(){
+ if(!('speechSynthesis' in window))return;
+ const previous=$('voiceChoice').value;
+ voices=speechSynthesis.getVoices().filter(v=>/^fr([_-]|$)/i.test(v.lang)&&desiredVoices.some(name=>new RegExp('\\b'+name+'\\b','i').test(v.name)));
+ const select=$('voiceChoice');select.replaceChildren();
+ for(let i=0;i<voices.length;i++){const opt=document.createElement('option');opt.value=String(i);opt.textContent=voices[i].name;select.append(opt);}
+ if(!voices.length){const opt=document.createElement('option');opt.value='auto';opt.textContent='Voix française du téléphone';select.append(opt);}
+ if([...select.options].some(o=>o.value===previous))select.value=previous;
+ else {const paul=voices.findIndex(v=>/\bPaul\b/i.test(v.name));select.value=String(paul>=0?paul:0);}
+ $('voiceInfo').textContent='';
+}
+if('speechSynthesis' in window){refreshVoices();speechSynthesis.addEventListener('voiceschanged',refreshVoices);}
+$('voiceChoice').addEventListener('focus',refreshVoices);
+$('readBtn').addEventListener('click',()=>setTimeout(refreshVoices,150));
+let speechParts=[],speechIndex=0,speechOffset=0,speechPaused=false,speechActive=false,speechDelay=null,speechRun=0;
+function stopSpeech(){speechRun++;speechActive=false;speechPaused=false;speechParts=[];speechIndex=0;speechOffset=0;if(speechDelay!==null){clearTimeout(speechDelay);speechDelay=null;}if('speechSynthesis' in window)speechSynthesis.cancel();$('pause').textContent='⏸ Pause';}
+function makeParts(data){
+ // Les paragraphes et titres sont prononcés sans pause au milieu d'une phrase.
+ const chunks=[];
+ for(const [i,p] of [data.title,...data.paragraphs.filter((x,j)=>!(j===0&&x.trim()===data.title.trim()))].entries()){
+  const sentences=p.match(/[^.!?]+[.!?]+[»”"]?|[^.!?]+$/g)||[p];
+  for(const s of sentences){
+   const words=s.trim().split(/\s+/);let chunk='';
+   for(const w of words){if(chunk&&chunk.length+w.length+1>700){chunks.push({text:chunk,pause:0});chunk='';}chunk+=(chunk?' ':'')+w;}
+   if(chunk)chunks.push({text:chunk,pause:0});
+  }
+  if(chunks.length)chunks[chunks.length-1].pause=i===0?850:160;
+ }
+ return chunks;
+}
+function speakNext(){
+ if(!speechActive||speechPaused||!('speechSynthesis' in window))return;
+ if(speechIndex>=speechParts.length){speechActive=false;$('pause').textContent='⏸ Pause';return;}
+ const run=speechRun,part=speechParts[speechIndex],text=part.text.slice(speechOffset).trimStart();
+ if(!text){speechIndex++;speechOffset=0;speakNext();return;}
+ const offsetBase=part.text.length-text.length;
+ 
+ // Pronunciation-only normalization: the displayed editorial text stays unchanged.
+ let spoken=text;
+ spoken=spoken.replace(/CESTA\s+DE\s+NADAÜ/gi,'sèsta de nada-u'); // Lecture phonétique, sans expansion du nom de l’événement
+ spoken=spoken.replace(/\bLagor\b/gi,'La-gor');
+ spoken=spoken.replace(/\bswimrunner(s)?\b/gi,(_,plural)=>'souim reuneur'+(plural?'s':''));
+ spoken=spoken.replace(/\bswimrun\b/gi,'souim reune');
+ spoken=spoken.replace(/\bpull[‐‑–—-]buoy\b/gi,'poul boï');
+ spoken=spoken.replace(/\bAxel Desperes\b/gi,'Axel Despéres');
+ spoken=spoken.replace(/\bCrabos\b/gi,'Crabos'); // Final S audible
+ spoken=spoken.replace(/\bCREPS\b/g,'crèpse');
+
+ // Mots, noms propres et chronos : transformations réservées à la voix.
+ spoken=spoken.replace(/\bPentat(?:h)?lon\b/gi,'pèntatlon');
+ spoken=spoken.replace(/\b(\d{1,2})\s*h\s*(\d{1,2})\s*[’'′]?/gi,(_,heures,minutes)=>`${Number(heures)} heures ${Number(minutes)} secondes`);
+ spoken=spoken.replace(/\bAxel\s+Desp[ée]res\b/gi,'Axel Daisse Pé Raisse');
+ spoken=spoken.replace(/\bCrabos\b/gi,'Cra bosse');
+ spoken=spoken.replace(/\bGarlin\b/gi,'Gar lin');
+ spoken=spoken.replace(/\bFrance\s+A\b/gi,'France A');
+ spoken=spoken.replace(/\bPlana\b/gi,'Pla na');
+ spoken=spoken.replace(/\bimpulsivement\b/gi,'im pulsivement');
+ spoken=spoken.replace(/\bsweats\b/gi,'souètes');
+ spoken=spoken.replace(/\b1991\b/g,'mille neuf cent quatre vingt onze');
+ spoken=spoken.replace(/\bsœurs?\b/gi,m=>m.toLowerCase().endsWith('s')?'seurs':'seur');
+ spoken=spoken.replace(/\bDos\b/g,'do');
+ spoken=spoken.replace(/\bLons\b/gi,'Lonsse');
+ spoken=spoken.replace(/\bSupersevens\b/gi,'super séveunz');
+ spoken=spoken.replace(/\bFlag\b/gi,'flague');
+ spoken=spoken.replace(/\bplus\b/gi,'pluss');
+ spoken=spoken.replace(/\bMorlaàs\b/gi,'Morla asse');
+ spoken=spoken.replace(/\bRégionale\s+1\b/gi,'Régionale un');
+ spoken=spoken.replace(/problème\.\s*»/gi,'problème »');
+ // Corrections de lecture uniquement : le texte des articles reste intact.
+ spoken=spoken.replace(/Challenge\s+Fédéral\s+niveau\s+A\s+64\s*\/\s*40/gi,'Challenge Fédéral niveau A, des départements 64 et 40');
+ spoken=spoken.replace(/Rugby\s+à\s+5\s+Santé/gi,'Rugby Santé sur ordonnance à cinq');
+ spoken=spoken.replace(/\(\s*4\s*[-–]\s*7\s*ans\s*\)/gi,'(4 à 7 ans)');
+ spoken=spoken.replace(/\(Boxe\s+Éducative\s+Assaut\s*[-–]\s*BEA\)/gi,'(Boxe Éducative Assaut)');
+ spoken=spoken.replace(/\bDepuis\s+un\s+an\b/gi,'Depuis 1 an');
+ spoken=spoken.replace(/\bBike\s*&\s*Run\b/gi,'Baïk and Reune');
+ spoken=spoken.replace(/\bperformer\b/gi,'performé');
+ spoken=spoken.replace(/\b1956\b/g,'mille neuf cent cinquante-six');
+ spoken=spoken.replace(/\b1981\b/g,'mille neuf cent quatre-vingt-un');
+ spoken=spoken.replace(/\bdébriefs\b/gi,'débrif');
+ spoken=spoken.replace(/\baffluences\b/gi,'a-flu-ansses');
+
+
+ const u=new SpeechSynthesisUtterance(spoken);u.lang='fr-FR';u.rate=(modalPage>=5&&modalPage<=23&&speechIndex===0)?.84:.95;u.pitch=1.1;
+ const choice=Number($('voiceChoice').value);if(voices[choice])u.voice=voices[choice];
+ // La devise de la page 32 est prononcée en anglais, sans changer les voix françaises des autres pages.
+ if(modalPage===32 && /Together,\s*stronger with every game/i.test(text)){
+  u.lang='en-GB';
+  const englishVoices=speechSynthesis.getVoices().filter(v=>/^en([_-]|$)/i.test(v.lang));
+  const englishVoice=englishVoices.find(v=>/^en-GB$/i.test(v.lang))||englishVoices[0];
+  if(englishVoice)u.voice=englishVoice;else u.voice=null;
+ }
+
+ let latestBoundary=0;
+ u.onboundary=e=>{if(run===speechRun&&typeof e.charIndex==='number')latestBoundary=e.charIndex;};
+ u.onend=()=>{if(run!==speechRun||speechPaused)return;speechIndex++;speechOffset=0;speechDelay=setTimeout(speakNext,part.pause);};
+ u.onerror=e=>{if(run!==speechRun||speechPaused||e.error==='canceled'||e.error==='interrupted')return;$('voiceInfo').textContent='Lecture interrompue : '+e.error;};
+ // Conserver la position du mot courant pour une reprise Android même si pause() redémarre.
+ window.__mag10SpeechPosition=()=>{const idx=Math.max(0,Math.min(text.length,latestBoundary));let pos=idx;if(idx){const after=text.slice(idx);const m=after.match(/^\S*/);pos+=m?m[0].length:0;}speechOffset=offsetBase+pos;};
+ speechSynthesis.speak(u);
+}
+$('speak').onclick=()=>{
+ if(!('speechSynthesis' in window)){alert('La lecture vocale n’est pas disponible sur ce navigateur.');return;}
+ const data=articleData[String(modalPage)];if(!data)return;
+ stopSpeech();speechParts=makeParts(data);speechActive=true;speechRun++;
+ const selected=voices[Number($('voiceChoice').value)];
+ $('voiceInfo').textContent='';
+ speakNext();
+};
+$('pause').onclick=()=>{
+ if(!speechActive)return;
+ if(!speechPaused){
+  speechPaused=true;
+  if(speechDelay!==null){clearTimeout(speechDelay);speechDelay=null;}
+  else if(window.__mag10SpeechPosition)window.__mag10SpeechPosition();
+  speechRun++;speechSynthesis.cancel();$('pause').textContent='▶ Reprendre';
+ }else{
+  speechPaused=false;$('pause').textContent='⏸ Pause';speakNext();
+ }
+};
+$('stop').onclick=stopSpeech;
+async function showZoom(){const pg=await pdf.getPage(modalPage);const vp=pg.getViewport({scale:1.7});const canvas=$('zoomcanvas');if(renderTask){try{renderTask.cancel();await renderTask.promise;}catch(e){}renderTask=null;}canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);renderTask=pg.render({canvasContext:canvas.getContext('2d'),viewport:vp});try{await renderTask.promise;}catch(e){if(e.name!=='RenderingCancelledException')console.error(e);}zoom=1;applyZoom();$('zooming').scrollTop=0;$('zooming').scrollLeft=0;}
+function applyZoom(){const canvas=$('zoomcanvas');const container=$('zooming');const base=Math.min((container.clientWidth-25)/canvas.width,1);canvas.style.width=Math.max(1,Math.floor(canvas.width*base*zoom))+'px';canvas.style.height='auto';$('zoomLabel').textContent=Math.round(zoom*100)+' %';}
+$('zoomMinus').onclick=()=>{zoom=Math.max(1,zoom/1.3);applyZoom()};$('zoomPlus').onclick=()=>{zoom=Math.min(5,zoom*1.3);applyZoom()};$('zoomReset').onclick=()=>{zoom=1;applyZoom()};
+init();
+</script>
+</body></html>
