@@ -5,6 +5,14 @@
 <title>Section Paloise Omnisports — Le Mag n°10</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial,Helvetica,sans-serif}body{background:#11251c;color:white}button,select{font:inherit}button{cursor:pointer;border:1px solid #91b09b;background:#345e43;color:white;border-radius:8px;padding:10px 13px}button:hover{background:#477d58}button:disabled{opacity:.4;cursor:default}button:focus-visible,select:focus-visible{outline:3px solid #f2c66d}#app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}header,footer{background:#254230;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 12px;flex-shrink:0;flex-wrap:wrap}header{justify-content:space-between;min-height:56px}header strong{font-size:15px}.brand{display:flex;flex-direction:column;gap:3px}.brand span{font-size:12px;color:#e4f1e8}footer{min-height:55px}#viewer{flex:1;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:12px;background:#182920}#book{flex-shrink:0;margin:auto}.page{background:white;overflow:hidden}.page canvas{display:block;width:100%;height:100%}#status{min-width:92px;text-align:center;font-size:13px}#app:fullscreen{height:100vh;height:100dvh;background:#10251b}#app:fullscreen #viewer{padding:5px}#app:fullscreen header{min-height:44px}#app:fullscreen footer{min-height:48px}#app:fullscreen #viewer{padding:2px}#app:fullscreen header,#app:fullscreen footer{display:none}#app:fullscreen #book{transform-origin:center center}#overlay{position:fixed;inset:0;background:rgba(4,17,11,.93);z-index:2000;display:none;flex-direction:column;color:white}#overlay.open{display:flex}.modalbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;padding:9px;background:#203e2c}.modalbar select{max-width:185px;padding:9px;border-radius:6px;background:white;color:#13261a}#reading,#zooming{flex:1;min-height:0;overflow:auto;display:none}#reading.active,#zooming.active{display:block}#reading{background:#fff;color:#17271e;padding:20px max(20px,calc((100vw - 760px)/2));font-size:20px;line-height:1.65}#reading h2{font-size:1.35em;line-height:1.25}#reading p{margin:0 0 1.1em}#zooming{text-align:center;background:#303030;touch-action:pan-x pan-y}#zoomcanvas{display:block;margin:15px auto;max-width:none;background:white;box-shadow:0 4px 20px #111}#note{font-size:12px;text-align:center;padding:5px;background:#203e2c}#readerControls{display:none}#readerControls.visible{display:flex}#zoomControls{display:none}#zoomControls.visible{display:flex}#readerControls,#zoomControls{align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:8px;background:#203e2c}#voiceInfo{font-size:12px;max-width:360px}#readerControls label{font-size:12px;display:inline-flex;gap:5px;align-items:center}#readerControls select{max-width:240px}#err{color:#ffe2a1;font-size:13px}#close{background:#6a3838}@media(max-width:650px){header strong{font-size:12px}.brand span{font-size:11px}header{gap:5px;padding:6px}header button,footer button{padding:8px;font-size:12px}footer{gap:6px}#viewer{padding:5px}#status{min-width:65px;font-size:11px}#reading{padding:18px;font-size:19px}.modalbar button,.modalbar select{padding:8px;font-size:13px}}
+/* Commandes de grossissement du livre : visibles uniquement en plein écran. */
+#fullscreenZoomTools{display:none;position:absolute;right:16px;bottom:16px;z-index:1000;align-items:center;gap:5px;padding:5px;background:rgba(18,42,29,.82);border:1px solid rgba(255,255,255,.22);border-radius:11px;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+#app:fullscreen #fullscreenZoomTools{display:flex}
+#fullscreenZoomTools button{min-width:35px;height:34px;padding:4px 7px;font-size:17px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:7px}
+#fullscreenZoomTools button:hover{background:rgba(255,255,255,.28)}
+#fullscreenZoomReset{font-size:12px!important;min-width:51px!important}
+#app:fullscreen #viewer{overflow:auto;align-items:flex-start;justify-content:flex-start;scrollbar-width:thin}
+#app:fullscreen #book{margin:auto}
 @media (min-width:651px){#zoomBtn{display:none!important}}
 </style>
 </head>
@@ -12,6 +20,7 @@
 <div id="app">
 <header><div class="brand"><strong>SECTION PALOISE OMNISPORTS · LE MAG10</strong><span>Le magazine de toutes les Sections !</span></div><div><button id="readBtn" type="button">📖 Lire / Écouter</button> <button id="zoomBtn" type="button">🔎 Zoom</button> <button id="fullBtn" type="button">⛶ Plein écran</button></div></header>
 <main id="viewer"><div id="book"></div></main>
+<div id="fullscreenZoomTools" aria-label="Zoom du magazine en plein écran"><button id="fullscreenZoomMinus" type="button" title="Réduire" aria-label="Réduire la double page">−</button><button id="fullscreenZoomReset" type="button" title="Taille initiale">100 %</button><button id="fullscreenZoomPlus" type="button" title="Agrandir" aria-label="Agrandir la double page">+</button></div>
 <footer><button id="prev" type="button">❮ Précédent</button><span id="status">Chargement…</span><button id="next" type="button">Suivant ❯</button></footer>
 </div>
 <div id="overlay" role="dialog" aria-modal="true" aria-label="Lecture accessible">
@@ -39,26 +48,42 @@ function sizeForViewer(){
 }
 function initFlip(){const s=sizeForViewer();flip=new St.PageFlip(book,{width:s.width,height:s.height,size:'fixed',showCover:true,usePortrait:!s.desktop,autoSize:false,drawShadow:true,maxShadowOpacity:.5,flippingTime:850,mobileScrollSupport:false,useMouseEvents:true,swipeDistance:30});flip.loadFromHTML(document.querySelectorAll('.page'));flip.on('flip',e=>{pageIndex=e.data;updateStatus()});updateStatus();}
 function updateStatus(){if(!pdf)return;$('status').textContent='Page '+(pageIndex+1)+' / '+pdf.numPages;}
-/* Agrandir le livre entier en plein écran sans toucher aux pages ni à PageFlip. */
+/* Le grossissement porte sur le livre affiché, sans modifier PageFlip. */
+let fullscreenBaseZoom=1,fullscreenZoomLevel=1;
+function applyFullscreenBookZoom(keepPosition=false){
+ if(!flip||!document.fullscreenElement)return;
+ const oldWidth=viewer.scrollWidth,oldHeight=viewer.scrollHeight;
+ const cx=viewer.scrollLeft+viewer.clientWidth/2,cy=viewer.scrollTop+viewer.clientHeight/2;
+ book.style.zoom=String(fullscreenBaseZoom*fullscreenZoomLevel);
+ $('fullscreenZoomReset').textContent=Math.round(fullscreenZoomLevel*100)+' %';
+ if(keepPosition){
+  viewer.scrollLeft=cx*(viewer.scrollWidth/Math.max(1,oldWidth))-viewer.clientWidth/2;
+  viewer.scrollTop=cy*(viewer.scrollHeight/Math.max(1,oldHeight))-viewer.clientHeight/2;
+ }else{viewer.scrollLeft=0;viewer.scrollTop=0;}
+}
 function adaptFullscreen(){
  if(!flip)return;
- book.style.zoom='1';
- book.style.transform='none';
- if(!document.fullscreenElement)return;
+ book.style.zoom='1';book.style.transform='none';
+ if(!document.fullscreenElement){fullscreenBaseZoom=1;fullscreenZoomLevel=1;return;}
  const cs=getComputedStyle(viewer);
- const aw=viewer.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-8;
- const ah=viewer.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-8;
+ const aw=viewer.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-12;
+ const ah=viewer.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom)-12;
  const r=book.getBoundingClientRect();
- if(r.width>0&&r.height>0){
-  const factor=Math.max(1,Math.min(aw/r.width,ah/r.height,3));
-  // CSS zoom agrandit le contenu ET sa surface interactive dans Chrome/Edge.
-  book.style.zoom=String(factor);
- }
+ fullscreenBaseZoom=r.width>0&&r.height>0?Math.max(1,Math.min(aw/r.width,ah/r.height,3)):1;
+ applyFullscreenBookZoom();
 }
+function changeFullscreenZoom(direction){
+ if(!document.fullscreenElement)return;
+ fullscreenZoomLevel=direction===0?1:Math.max(1,Math.min(3,Math.round((fullscreenZoomLevel+direction*.25)*100)/100));
+ applyFullscreenBookZoom(true);
+}
+$('fullscreenZoomMinus').onclick=()=>changeFullscreenZoom(-1);
+$('fullscreenZoomPlus').onclick=()=>changeFullscreenZoom(1);
+$('fullscreenZoomReset').onclick=()=>changeFullscreenZoom(0);
 async function init(){try{const response=await fetch('articles.json');if(!response.ok)throw Error('articles.json introuvable');articleData=await response.json();pdf=await pdfjsLib.getDocument('magazine.pdf').promise;for(let i=1;i<=pdf.numPages;i++){$('status').textContent='Chargement '+i+'/'+pdf.numPages;const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.4}),canvas=document.createElement('canvas'),page=document.createElement('div');canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);await pg.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;page.className='page';page.dataset.density=(i===1||i===pdf.numPages)?'hard':'soft';page.append(canvas);book.append(page);}initFlip();}catch(e){console.error(e);$('status').textContent='Erreur : '+e.message;}}
 $('next').onclick=()=>flip?.flipNext();$('prev').onclick=()=>flip?.flipPrev();
 $('fullBtn').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await app.requestFullscreen();}catch(e){alert('Plein écran indisponible : '+e.message)}};
-document.addEventListener('fullscreenchange',()=>{$('fullBtn').textContent=document.fullscreenElement?'✕ Quitter':'⛶ Plein écran';requestAnimationFrame(()=>setTimeout(adaptFullscreen,150));});
+document.addEventListener('fullscreenchange',()=>{$('fullBtn').textContent=document.fullscreenElement?'✕ Quitter':'⛶ Plein écran';fullscreenZoomLevel=1;requestAnimationFrame(()=>setTimeout(adaptFullscreen,150));});
 window.addEventListener('resize',()=>{clearTimeout(resizeHandle);resizeHandle=setTimeout(adaptFullscreen,180)});
 document.addEventListener('keydown',e=>{if($('overlay').classList.contains('open')){if(e.key==='Escape')closeModal();return;}if(e.key==='ArrowRight')flip?.flipNext();if(e.key==='ArrowLeft')flip?.flipPrev();});
 function selectedPage(){const current=pageIndex+1;return eligible.includes(current)?current:eligible.find(n=>n>=current)||eligible[0];}
